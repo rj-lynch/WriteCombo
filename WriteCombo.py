@@ -13,19 +13,79 @@ def select_dfmea_files():
         filetypes=[("Excel files", "*.xlsx *.xls")]))
     return file_paths
 
-# 2. Read DFMEA Excel file and find failure causes
-def create_dict_dfmea_failure_causes(file_path):
-    try:
-        df = pd.read_excel(file_path, engine='openpyxl')
-        cause_col = "*Potential Cause(s)/ Mechanism(s) of Failure"
-        rpn_col = "RPN"
-        if cause_col not in df.columns or rpn_col not in df.columns:
-            print(f"Error: Required columns not found in header.")
-            return {}
-        result = {}
-        for cause, rpn in zip(df[cause_col], df[rpn_col]):
-            result[cause] = rpn
-        return result
-    except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+# 2. Find header indices
+def find_header_indices(file_path):
+    preview = pd.read_excel(file_path, engine='openpyxl', header=None, nrows=20)
+    cause_col_idx = rpn_col_idx = header_row = None
+    rpn_found = False
+    for i, row in preview.iterrows():
+        for j, val in enumerate(row):
+            val_str = str(val).replace('\n', '').replace(' ', '').lower()
+            if val_str == "*potentialcause(s)/mechanism(s)offailure":
+                cause_col_idx = j
+                if header_row is None:
+                    header_row = i
+            # Match first RPN column only, robust to line breaks and whitespace
+            if not rpn_found and (val_str == "r.p.n." or val_str == "rpn"):
+                rpn_col_idx = j
+                rpn_found = True
+                if header_row is None or i < header_row:
+                    header_row = i
+    header = (header_row, cause_col_idx, rpn_col_idx)
+    return header
+
+# 3 Create dictionary of failure causes and RPNs
+def create_dict_dfmea_failure_causes(file_path, header):
+    if header[1] is None or header[2] is None:
+        print(f"Error: Required columns not found in any of the first 20 rows.")
         return {}
+        # Read the data, skipping rows before the header
+    df = pd.read_excel(file_path, engine='openpyxl', header=None, skiprows=header[0]+1)
+    failure_causes = {}
+    for _, row in df.iterrows():
+        cause = row[header[1]]
+        rpn = row[header[2]]
+        if pd.isna(cause) or pd.isna(rpn):
+            continue
+        failure_causes[cause] = rpn
+    return failure_causes
+    
+# 4. Create combinations of failure causes
+def create_combinations(failure_causes):
+    cases = {"Boundary": 0.2, "Robust": 0.3, "State": 0.1, "Error": 0.4}
+    combos = itertools.product(cases.items(),failure_causes.items())
+    return combos
+
+# 5. Calculate index and generate test specification
+def calculate_index(combos):
+    test_spec = []
+    for combo in combos:
+        index = (combo[0][1] * combo[1][1])
+        test_case = (f"{combo[0][0]}-{combo[1][0]}")
+        test_spec.append((index, test_case))
+    test_spec.sort(reverse=True, key=lambda x: x[0])
+    return test_spec
+
+# 6. Write test specification to CSV file
+def write_test_spec_to_csv(test_spec):
+    with open('test_specification.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Index', 'Test Case'])
+        for row in test_spec:
+            writer.writerow(row)
+    print("Test specification written to test_specification.csv")
+
+# Main execution
+if __name__ == "__main__":
+    file_paths = select_dfmea_files()
+    all_failure_causes = {}
+    for file_path in file_paths:
+        header = find_header_indices(file_path)
+        failure_causes = create_dict_dfmea_failure_causes(file_path, header)
+        all_failure_causes.update(failure_causes)
+    if not all_failure_causes:
+        print("No failure causes found. Exiting.")
+    else:
+        combos = create_combinations(all_failure_causes)
+        test_spec = calculate_index(combos)
+        write_test_spec_to_csv(test_spec)
