@@ -1,29 +1,34 @@
 WriteCombo
 
-This script generates all possible combinations of failure causes for a DFMEA (Design Failure Mode and Effects Analysis) scenario, calculates a "Complexity-Probability Index" for each combination, and exports the results to a CSV file.
+This script processes DFMEA (Design Failure Mode and Effects Analysis) Excel files, extracts failure causes and their RPN (Risk Priority Number) values, generates all possible test case combinations, calculates a test index for each, and exports the results to a CSV file.
 
 Features
-Generates all combinations of categorical variables (e.g., weather, road condition, slope, etc.).
-Calculates a risk score for each combination based on provided complexity and probability values.
-Outputs the results as a Pandas DataFrame and saves them to test_combinations.csv.
+- Selects one or more DFMEA Excel files via a file dialog.
+- Automatically detects the header row and the columns for failure cause and RPN, even if their position varies.
+- Builds a dictionary mapping each unique failure cause to its RPN.
+- Generates all combinations of test case types and failure causes.
+- Calculates a test index for each combination (case weight × RPN).
+- Outputs the results to 'test_specification.csv'.
+
 How It Works
-Define Variables: Lists of possible values for each failure cause are defined in variable_values.
-Define Names: The names of each variable are provided as a comma-separated string in variable_names_string.
-Define Complexity & Probability: For each variable value, a tuple of (complexity, probability) is provided in complexity_probabilities.
-Generate Combinations: The script uses itertools.product to generate all possible combinations.
-Calculate Index: For each combination, the script multiplies the complexity and probability values across all variables to compute the "Complexity-Probability Index".
-Export: The resulting table is saved as test_combinations.csv.
+1. **File Selection:** The script prompts you to select one or more Excel files containing DFMEA data.
+2. **Header Detection:** It scans the first 20 rows of each file to find the header row and the columns for failure cause and RPN, robust to line breaks and whitespace.
+3. **Dictionary Creation:** For each file, it creates a dictionary mapping each failure cause to its RPN value.
+4. **Combination Generation:** It creates all combinations of predefined test case types and the extracted failure causes.
+5. **Index Calculation:** For each combination, it multiplies the test case weight by the RPN to compute a test index.
+6. **Export:** The results are saved as 'test_specification.csv' in the same directory.
+
 Usage
-Ensure you have Python 3 and the required dependencies installed:
-
-Run the script:
-
-The output file test_combinations.csv will be created in the same directory.
-
-Example Output
-The script prints the first few rows of the generated table:
+1. Ensure you have Python 3 and the required dependencies installed (pandas, openpyxl).
+2. Run the script:
+	```
+	python WriteCombo.py
+	```
+3. Select the desired DFMEA Excel files when prompted.
+4. The output file 'test_specification.csv' will be created in the same directory.
 
 Customization
-To use different variables or risk scoring, modify the variable_values, variable_names_string, and complexity_probabilities lists at the top of the script.
+- To change the test case types or their weights, edit the `cases` dictionary in the `create_combinations` function.
+- The script is robust to different header row positions and column orders in your Excel files.
 
 For questions or improvements, please open an issue or pull request.
