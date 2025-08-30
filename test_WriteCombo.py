@@ -9,6 +9,7 @@ from WriteCombo import (
 import pytest
 import pandas as pd
 import os
+import csv
 
 def test_select_dfmea_file(mocker):
     expected_paths = ['C:/path/to/my_file.xlsx', 'D:/another/path/second.xls']
@@ -57,6 +58,38 @@ def test_find_header_indices(tmp_path):
     assert cause_col_idx == 0
     assert rpn_col_idx == 2
 
+def test_find_header_indices_failed(tmp_path):
+    # Create a DataFrame with headers not in the first row
+    data = [
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        [None, None, None],
+        ['Cause 1', None, 5],
+        ['Cause 2', None, 3]
+    ]
+    file_path = tmp_path / "header_test.xlsx"
+    pd.DataFrame(data).to_excel(file_path, index=False, header=False)
+    header_row, cause_col_idx, rpn_col_idx = find_header_indices(str(file_path))
+    assert header_row == None
+    assert cause_col_idx == None
+    assert rpn_col_idx == None
+
 def test_create_dict_dfmea_failure_causes(tmp_path):
     # Create temp data for Excel
     df = pd.DataFrame({
@@ -75,6 +108,26 @@ def test_create_dict_dfmea_failure_causes(tmp_path):
     # Build expected dict as function returns
     expected = {'Cause 1': 5, 'Cause 2': 3, 'Cause 3': 5, 'Cause 4': 8, 'Cause 5': 5, 'Cause 6': 3,'Cause 7': 8, 'Cause 8': 8, 'Cause 9': 8}
 
+    assert result == expected
+
+def test_create_dict_dfmea_failure_causes_failed(tmp_path, capfd):
+    # Create temp data for Excel
+    df = pd.DataFrame({
+        '*Potential Cause(s)/ Mechanism(s) of Failure': ['Cause 1', 'Cause 2', 'Cause 3', 'Cause 4', 'Cause 5', 'Cause 6', 'Cause 7', 'Cause 8', 'Cause 9'],
+        'R.P.N.': [5, 3, 5, 8, 5, 3, 8, 8, 8]
+    })
+    file_path = tmp_path / "temp_dfmea.xlsx"
+    df.to_excel(file_path, index=False)
+
+    # Find header indices using the new helper
+    header = (None, 7, 10)
+    # Call the function to test with new signature
+    result = create_dict_dfmea_failure_causes(str(file_path), header)
+
+    # Build expected dict as function returns
+    expected = {}
+    out, err = capfd.readouterr() # out is printed output, err is empty
+    assert "Error: Required columns not found in any of the first 20 rows." in out
     assert result == expected
 
 def test_create_combinations():
@@ -140,3 +193,25 @@ def test_write_test_spec_to_csv(tmp_path):
     assert lines[2].strip() == '1.5,Robust-Cause 1'
     assert lines[3].strip() == '1.0,Boundary-Cause 1'
     assert len(lines) == 4
+
+def test_write_test_spec_to_csv_special_characters(tmp_path):
+    test_spec = [
+        (2.0, 'Error-Cause,1'),
+        (1.5, 'Robust-Cause "2"'),
+        (1.0, 'Boundary-Cause\n3'),
+        (0.5, 'State-Cause,4 with,commas'),
+        (0.2, 'Other-Cause "5" and newline\n')
+    ]
+    os.chdir(tmp_path)
+    write_test_spec_to_csv(test_spec)
+    file_path = tmp_path / "test_specification.csv"
+    assert file_path.exists()
+    with open(file_path, 'r', encoding='utf-8', newline='') as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    assert rows[0] == ['Index', 'Test Case']
+    assert rows[1] == ['2.0', 'Error-Cause,1']
+    assert rows[2] == ['1.5', 'Robust-Cause "2"']
+    assert rows[3] == ['1.0', 'Boundary-Cause\n3']
+    assert rows[4] == ['0.5', 'State-Cause,4 with,commas']
+    assert rows[5] == ['0.2', 'Other-Cause "5" and newline\n']
